@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>FamLink - Family Health & Community Platform</title>
+  <base href="/">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="FamLink connects families with healthcare resources, community support, and expert pediatric guidance.">
+  <meta name="keywords" content="family health, pediatric care, community, medical records, appointments">
+  <meta name="author" content="FamLink Team">
+  
+  <!-- Open Graph / Facebook -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://famlink.com/">
+  <meta property="og:title" content="FamLink - Family Health & Community Platform">
+  <meta property="og:description" content="Connect with other parents, manage your family's health records, and get expert pediatric guidance.">
+  <meta property="og:image" content="https://famlink.com/assets/images/og-image.jpg">
+
+  <!-- Twitter -->
+  <meta property="twitter:card" content="summary_large_image">
+  <meta property="twitter:url" content="https://famlink.com/">
+  <meta property="twitter:title" content="FamLink - Family Health & Community Platform">
+  <meta property="twitter:description" content="Connect with other parents, manage your family's health records, and get expert pediatric guidance.">
+  <meta property="twitter:image" content="https://famlink.com/assets/images/twitter-image.jpg">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
+  <link rel="apple-touch-icon" sizes="180x180" href="assets/icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/icons/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="assets/icons/favicon-16x16.png">
+  <link rel="manifest" href="assets/icons/site.webmanifest">
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <!-- Theme Color -->
+  <meta name="theme-color" content="#3b82f6">
+  <meta name="msapplication-TileColor" content="#3b82f6">
+
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="FamLink">
+
+  <!-- Preload critical resources -->
+  <link rel="preload" href="assets/images/hero-bg.webp" as="image" type="image/webp">
+</head>
+<body class="font-sans antialiased bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100">
+  <app-root>
+    <!-- Loading screen -->
+    <div class="fixed inset-0 flex items-center justify-center bg-white dark:bg-neutral-900">
+      <div class="text-center">
+        <div class="inline-flex items-center justify-center w-16 h-16 mb-4 rounded-full bg-primary-100 dark:bg-primary-900">
+          <svg class="w-8 h-8 text-primary-600 dark:text-primary-400 animate-spin" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+        </div>
+        <h1 class="text-2xl font-bold text-primary-600 dark:text-primary-400 mb-2">FamLink</h1>
+        <p class="text-neutral-600 dark:text-neutral-400">Loading your family health platform...</p>
+      </div>
+    </div>
+  </app-root>
+
+  <!-- Service Worker Registration -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+          .then((registration) => {
+            console.log('SW registered: ', registration);
+          })
+          .catch((registrationError) => {
+            console.log('SW registration failed: ', registrationError);
+          });
+      });
+    }
+  </script>
+</body>
+</html>
