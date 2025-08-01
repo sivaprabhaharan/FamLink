@@ -52,3 +52,10 @@ CodeCoverage/
 *.VisualState.xml
 TestResult.xml
 nunit-*.xml
+
+# Frontend
+frontend/dist/
+frontend/node_modules/
+# Angular
+.angular/
+

@@ -210,7 +210,7 @@ export function WithLoading(loadingService?: LoadingService, key?: string) {
     const method = descriptor.value;
 
     descriptor.value = async function (...args: any[]) {
-      const service = loadingService || this.loadingService;
+      const service = loadingService || (this as any).loadingService;
       
       if (!service) {
         console.warn('LoadingService not found for @WithLoading decorator');

@@ -232,7 +232,7 @@ export class AuthService {
 
   private mockLogin(credentials: LoginRequest): Observable<AuthResponse> {
     // Simulate API delay
-    return new Promise<AuthResponse>((resolve, reject) => {
+    return new Observable<AuthResponse>(observer => {
       setTimeout(() => {
         if (credentials.email === 'demo@famlink.com' && credentials.password === 'demo123') {
           const mockResponse: AuthResponse = {
@@ -253,18 +253,19 @@ export class AuthService {
           };
           this.handleAuthSuccess(mockResponse);
           this.isLoadingSignal.set(false);
-          resolve(mockResponse);
+          observer.next(mockResponse);
+          observer.complete();
         } else {
           this.isLoadingSignal.set(false);
-          reject(new Error('Invalid credentials'));
+          observer.error(new Error('Invalid credentials'));
         }
       }, 1000);
-    }).then(response => of(response)).catch(error => throwError(() => error));
+    });
   }
 
   private mockRegister(userData: RegisterRequest): Observable<AuthResponse> {
     // Simulate API delay
-    return new Promise<AuthResponse>((resolve) => {
+    return new Observable<AuthResponse>(observer => {
       setTimeout(() => {
         const mockResponse: AuthResponse = {
           user: {
@@ -283,9 +284,10 @@ export class AuthService {
         };
         this.handleAuthSuccess(mockResponse);
         this.isLoadingSignal.set(false);
-        resolve(mockResponse);
+        observer.next(mockResponse);
+        observer.complete();
       }, 1000);
-    }).then(response => of(response));
+    });
   }
 
   private handleAuthSuccess(response: AuthResponse): void {
