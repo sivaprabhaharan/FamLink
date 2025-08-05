@@ -2,6 +2,8 @@ import { Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterModule } from '@angular/router';
+import { AuthService } from '@/app/core/services/auth.service';
+import { firstValueFrom } from 'rxjs';
 
 @Component({
   selector: 'app-login',
@@ -125,6 +127,7 @@ import { Router, RouterModule } from '@angular/router';
 export class LoginComponent {
   private fb = inject(FormBuilder);
   private router = inject(Router);
+  private authService = inject(AuthService);
 
   loginForm: FormGroup = this.fb.group({
     email: ['', [Validators.required, Validators.email]],
@@ -142,13 +145,13 @@ export class LoginComponent {
     this.errorMessage = '';
 
     try {
-      // TODO: Implement actual login logic with your auth service
-      const { email, password, rememberMe } = this.loginForm.value;
-      console.log('Login attempt with:', { email, password, rememberMe });
+      const { email, password } = this.loginForm.value;
       
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
+      const response = await firstValueFrom(this.authService.login({ 
+        email, 
+        password 
+      }));
+
       // On success, navigate to dashboard
       await this.router.navigate(['/dashboard']);
     } catch (error) {
