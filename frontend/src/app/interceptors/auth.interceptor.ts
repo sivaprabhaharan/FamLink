@@ -1,10 +1,10 @@
 import { HttpInterceptorFn } from '@angular/common/http';
 import { inject } from '@angular/core';
+import { from, switchMap } from 'rxjs';
 import { AuthService } from '../core/services/auth.service';
 
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const authService = inject(AuthService);
-  const token = authService.getAccessToken();
 
   // Skip auth for certain endpoints
   const skipAuth = [
@@ -15,12 +15,20 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
     '/auth/reset-password'
   ].some(endpoint => req.url.includes(endpoint));
 
-  if (token && !skipAuth) {
-    const authReq = req.clone({
-      headers: req.headers.set('Authorization', `Bearer ${token}`)
-    });
-    return next(authReq);
+  if (skipAuth) {
+    return next(req);
   }
 
-  return next(req);
+  // Get token asynchronously from Amplify
+  return from(authService.getAccessToken()).pipe(
+    switchMap(token => {
+      if (token) {
+        const authReq = req.clone({
+          headers: req.headers.set('Authorization', `Bearer ${token}`)
+        });
+        return next(authReq);
+      }
+      return next(req);
+    })
+  );
 };

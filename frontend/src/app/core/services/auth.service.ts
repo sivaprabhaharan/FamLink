@@ -1,23 +1,35 @@
 import { Injectable, signal, computed } from '@angular/core';
 import { Router } from '@angular/router';
-import { HttpClient } from '@angular/common/http';
-import { Observable, BehaviorSubject, throwError, of } from 'rxjs';
-import { catchError, tap, map } from 'rxjs/operators';
-import { environment } from '../../../environments/environment';
+import { BehaviorSubject, from, Observable, throwError } from 'rxjs';
+import { catchError, map, tap } from 'rxjs/operators';
+import { 
+  signIn, 
+  signOut, 
+  signUp, 
+  confirmSignUp, 
+  getCurrentUser, 
+  fetchAuthSession,
+  AuthUser,
+  SignInInput,
+  SignUpInput,
+  ConfirmSignUpInput,
+  resendSignUpCode,
+  resetPassword,
+  confirmResetPassword,
+  ResetPasswordInput,
+  ConfirmResetPasswordInput
+} from 'aws-amplify/auth';
 
 export interface User {
   id: string;
   email: string;
-  firstName: string;
-  lastName: string;
+  firstName?: string;
+  lastName?: string;
   profilePictureUrl?: string;
   phoneNumber?: string;
-  dateOfBirth?: string;
-  address?: string;
-  emergencyContact?: string;
   isEmailVerified: boolean;
-  createdAt: string;
-  updatedAt: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface LoginRequest {
@@ -28,195 +40,287 @@ export interface LoginRequest {
 export interface RegisterRequest {
   email: string;
   password: string;
-  firstName: string;
-  lastName: string;
+  firstName?: string;
+  lastName?: string;
   phoneNumber?: string;
 }
 
-export interface AuthResponse {
-  user: User;
-  accessToken: string;
-  refreshToken: string;
-  expiresIn: number;
+export interface ConfirmSignUpRequest {
+  email: string;
+  confirmationCode: string;
+}
+
+export interface ResetPasswordRequest {
+  email: string;
+}
+
+export interface ConfirmResetPasswordRequest {
+  email: string;
+  confirmationCode: string;
+  newPassword: string;
 }
 
 @Injectable({
   providedIn: 'root'
 })
 export class AuthService {
-  private readonly TOKEN_KEY = 'famlink-access-token';
-  private readonly REFRESH_TOKEN_KEY = 'famlink-refresh-token';
-  private readonly USER_KEY = 'famlink-user';
-
-  // Signals for reactive state management
   private currentUserSignal = signal<User | null>(null);
   private isLoadingSignal = signal<boolean>(false);
+  private isInitializedSignal = signal<boolean>(false);
+  private registrationUsernameSignal = signal<string | null>(null); // Store username for confirmation
 
   // Computed signals
   isAuthenticated = computed(() => this.currentUserSignal() !== null);
   currentUser = computed(() => this.currentUserSignal());
   isLoading = computed(() => this.isLoadingSignal());
+  isInitialized = computed(() => this.isInitializedSignal());
 
-  // Observable versions for compatibility
+  // Observable streams for compatibility
   isAuthenticated$ = new BehaviorSubject<boolean>(false);
   currentUser$ = new BehaviorSubject<User | null>(null);
 
-  constructor(
-    private http: HttpClient,
-    private router: Router
-  ) {
-    // Sync signals with BehaviorSubjects
+  constructor(private router: Router) {
     this.syncSignalsWithObservables();
+    this.initializeAuth();
   }
 
   /**
-   * Initialize authentication state from stored tokens
+   * Initialize authentication state
    */
-  initializeAuth(): void {
-    const token = this.getStoredToken();
-    const user = this.getStoredUser();
-
-    if (token && user && !this.isTokenExpired(token)) {
-      this.setCurrentUser(user);
-      this.setupTokenRefresh();
-    } else {
-      this.clearAuthData();
-    }
-  }
-
-  /**
-   * Login with email and password
-   */
-  login(credentials: LoginRequest): Observable<AuthResponse> {
+  async initializeAuth(): Promise<void> {
     this.isLoadingSignal.set(true);
-
-    // For development, use placeholder authentication
-    if (environment.production) {
-      return this.http.post<AuthResponse>(`${environment.apiUrl}/auth/login`, credentials)
-        .pipe(
-          tap(response => this.handleAuthSuccess(response)),
-          catchError(error => this.handleAuthError(error)),
-          tap(() => this.isLoadingSignal.set(false))
-        );
-    } else {
-      // Placeholder authentication for development
-      return this.mockLogin(credentials);
-    }
-  }
-
-  /**
-   * Register new user
-   */
-  register(userData: RegisterRequest): Observable<AuthResponse> {
-    this.isLoadingSignal.set(true);
-
-    if (environment.production) {
-      return this.http.post<AuthResponse>(`${environment.apiUrl}/auth/register`, userData)
-        .pipe(
-          tap(response => this.handleAuthSuccess(response)),
-          catchError(error => this.handleAuthError(error)),
-          tap(() => this.isLoadingSignal.set(false))
-        );
-    } else {
-      // Placeholder registration for development
-      return this.mockRegister(userData);
-    }
-  }
-
-  /**
-   * Logout user
-   */
-  logout(): void {
-    this.isLoadingSignal.set(true);
-
-    // Call logout endpoint if in production
-    if (environment.production) {
-      const refreshToken = this.getStoredRefreshToken();
-      if (refreshToken) {
-        this.http.post(`${environment.apiUrl}/auth/logout`, { refreshToken })
-          .subscribe({
-            complete: () => this.completeLogout()
-          });
-      } else {
-        this.completeLogout();
-      }
-    } else {
-      this.completeLogout();
-    }
-  }
-
-  /**
-   * Refresh access token
-   */
-  refreshToken(): Observable<AuthResponse> {
-    const refreshToken = this.getStoredRefreshToken();
     
-    if (!refreshToken) {
-      return throwError(() => new Error('No refresh token available'));
+    try {
+      const user = await getCurrentUser();
+      if (user) {
+        const userProfile = this.mapAuthUserToUser(user);
+        this.setCurrentUser(userProfile);
+      }
+    } catch (error) {
+      // User is not authenticated
+      this.setCurrentUser(null);
+    } finally {
+      this.isLoadingSignal.set(false);
+      this.isInitializedSignal.set(true);
     }
+  }
 
-    if (environment.production) {
-      return this.http.post<AuthResponse>(`${environment.apiUrl}/auth/refresh`, { refreshToken })
-        .pipe(
-          tap(response => this.handleAuthSuccess(response)),
-          catchError(error => {
-            this.logout();
-            return throwError(() => error);
-          })
-        );
-    } else {
-      // Mock refresh for development
-      return of({
-        user: this.currentUserSignal()!,
-        accessToken: 'mock-refreshed-token',
-        refreshToken: 'mock-refresh-token',
-        expiresIn: 3600
-      });
+  /**
+   * Sign in with email and password
+   */
+  async login(credentials: LoginRequest): Promise<void> {
+    this.isLoadingSignal.set(true);
+    
+    try {
+      const signInInput: SignInInput = {
+        username: credentials.email,
+        password: credentials.password
+      };
+
+      const result = await signIn(signInInput);
+      
+      if (result.isSignedIn) {
+        const user = await getCurrentUser();
+        const userProfile = this.mapAuthUserToUser(user);
+        this.setCurrentUser(userProfile);
+        await this.router.navigate(['/dashboard']);
+      } else {
+        throw new Error('Sign in incomplete');
+      }
+    } catch (error: any) {
+      console.error('Login error:', error);
+      throw new Error(this.getErrorMessage(error));
+    } finally {
+      this.isLoadingSignal.set(false);
+    }
+  }
+
+  /**
+   * Sign up new user
+   */
+  async register(userData: RegisterRequest): Promise<{ isSignUpComplete: boolean; nextStep?: any }> {
+    this.isLoadingSignal.set(true);
+    
+    try {
+      // Generate a unique username since email is used as alias
+      const username = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      
+      // Build user attributes - only include phone if it's provided and properly formatted
+      const userAttributes: Record<string, string> = {
+        email: userData.email,
+        given_name: userData.firstName || '',
+        family_name: userData.lastName || ''
+      };
+
+      // Only add phone number if provided and properly formatted
+      if (userData.phoneNumber && userData.phoneNumber.trim()) {
+        // Ensure phone number starts with + and country code
+        let phoneNumber = userData.phoneNumber.trim();
+        if (!phoneNumber.startsWith('+')) {
+          // If no country code, assume US (+1)
+          phoneNumber = '+1' + phoneNumber.replace(/\D/g, '');
+        }
+        userAttributes['phone_number'] = phoneNumber; // Use bracket notation for index signature
+      }
+      
+      const signUpInput: SignUpInput = {
+        username: username, // Use generated username instead of email
+        password: userData.password,
+        options: {
+          userAttributes: userAttributes
+        }
+      };
+
+      const result = await signUp(signUpInput);
+      
+      // Store the username for confirmation step
+      this.registrationUsernameSignal.set(username);
+      
+      return {
+        isSignUpComplete: result.isSignUpComplete,
+        nextStep: result.nextStep
+      };
+    } catch (error: any) {
+      console.error('Registration error:', error);
+      throw new Error(this.getErrorMessage(error));
+    } finally {
+      this.isLoadingSignal.set(false);
+    }
+  }
+
+  /**
+   * Confirm sign up with verification code
+   */
+  async confirmSignUp(data: ConfirmSignUpRequest): Promise<void> {
+    this.isLoadingSignal.set(true);
+    
+    try {
+      const username = this.registrationUsernameSignal();
+      if (!username) {
+        throw new Error('No registration session found. Please register again.');
+      }
+
+      const confirmInput: ConfirmSignUpInput = {
+        username: username, // Use stored username, not email
+        confirmationCode: data.confirmationCode
+      };
+
+      await confirmSignUp(confirmInput);
+      
+      // Clear the stored username after successful confirmation
+      this.registrationUsernameSignal.set(null);
+    } catch (error: any) {
+      console.error('Confirm sign up error:', error);
+      throw new Error(this.getErrorMessage(error));
+    } finally {
+      this.isLoadingSignal.set(false);
+    }
+  }
+
+  /**
+   * Resend confirmation code
+   */
+  async resendConfirmationCode(email: string): Promise<void> {
+    try {
+      const username = this.registrationUsernameSignal();
+      if (!username) {
+        throw new Error('No registration session found. Please register again.');
+      }
+      
+      await resendSignUpCode({ username: username });
+    } catch (error: any) {
+      console.error('Resend confirmation code error:', error);
+      throw new Error(this.getErrorMessage(error));
+    }
+  }
+
+  /**
+   * Sign out user
+   */
+  async logout(): Promise<void> {
+    this.isLoadingSignal.set(true);
+    
+    try {
+      await signOut();
+      this.setCurrentUser(null);
+      await this.router.navigate(['/auth/login']);
+    } catch (error: any) {
+      console.error('Logout error:', error);
+      // Even if logout fails, clear local state
+      this.setCurrentUser(null);
+      await this.router.navigate(['/auth/login']);
+    } finally {
+      this.isLoadingSignal.set(false);
+    }
+  }
+
+  /**
+   * Reset password
+   */
+  async resetPassword(data: ResetPasswordRequest): Promise<void> {
+    try {
+      const resetInput: ResetPasswordInput = {
+        username: data.email // For password reset, we can use email directly
+      };
+      await resetPassword(resetInput);
+    } catch (error: any) {
+      console.error('Reset password error:', error);
+      throw new Error(this.getErrorMessage(error));
+    }
+  }
+
+  /**
+   * Confirm reset password with code
+   */
+  async confirmResetPassword(data: ConfirmResetPasswordRequest): Promise<void> {
+    try {
+      const confirmInput: ConfirmResetPasswordInput = {
+        username: data.email, // For password reset, we can use email directly
+        confirmationCode: data.confirmationCode,
+        newPassword: data.newPassword
+      };
+      await confirmResetPassword(confirmInput);
+    } catch (error: any) {
+      console.error('Confirm reset password error:', error);
+      throw new Error(this.getErrorMessage(error));
     }
   }
 
   /**
    * Get current access token
    */
-  getAccessToken(): string | null {
-    return this.getStoredToken();
+  async getAccessToken(): Promise<string | null> {
+    try {
+      const session = await fetchAuthSession();
+      return session.tokens?.accessToken?.toString() || null;
+    } catch (error) {
+      console.error('Error getting access token:', error);
+      return null;
+    }
   }
 
   /**
-   * Check if user has specific role or permission
+   * Check if user has specific permission (placeholder for future implementation)
    */
   hasPermission(permission: string): boolean {
     // Implement role-based access control here
-    return true; // Placeholder
+    // You can check user groups or custom attributes
+    return true;
   }
 
   /**
-   * Update user profile
+   * Refresh user data
    */
-  updateProfile(userData: Partial<User>): Observable<User> {
-    this.isLoadingSignal.set(true);
-
-    if (environment.production) {
-      return this.http.put<User>(`${environment.apiUrl}/users/profile`, userData)
-        .pipe(
-          tap(user => {
-            this.setCurrentUser(user);
-            this.storeUser(user);
-          }),
-          catchError(error => this.handleAuthError(error)),
-          tap(() => this.isLoadingSignal.set(false))
-        );
-    } else {
-      // Mock update for development
-      const currentUser = this.currentUserSignal();
-      if (currentUser) {
-        const updatedUser = { ...currentUser, ...userData };
-        this.setCurrentUser(updatedUser);
-        this.storeUser(updatedUser);
-        this.isLoadingSignal.set(false);
-        return of(updatedUser);
+  async refreshUser(): Promise<void> {
+    try {
+      const user = await getCurrentUser();
+      if (user) {
+        const userProfile = this.mapAuthUserToUser(user);
+        this.setCurrentUser(userProfile);
       }
-      return throwError(() => new Error('No current user'));
+    } catch (error) {
+      console.error('Error refreshing user:', error);
+      this.setCurrentUser(null);
     }
   }
 
@@ -230,167 +334,45 @@ export class AuthService {
     }, 100);
   }
 
-  private mockLogin(credentials: LoginRequest): Observable<AuthResponse> {
-    // Simulate API delay
-    return new Observable<AuthResponse>(observer => {
-      setTimeout(() => {
-        if (credentials.email === 'demo@famlink.com' && credentials.password === 'demo123') {
-          const mockResponse: AuthResponse = {
-            user: {
-              id: '1',
-              email: credentials.email,
-              firstName: 'Demo',
-              lastName: 'User',
-              profilePictureUrl: 'https://via.placeholder.com/150',
-              phoneNumber: '+1234567890',
-              isEmailVerified: true,
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString()
-            },
-            accessToken: 'mock-access-token',
-            refreshToken: 'mock-refresh-token',
-            expiresIn: 3600
-          };
-          this.handleAuthSuccess(mockResponse);
-          this.isLoadingSignal.set(false);
-          observer.next(mockResponse);
-          observer.complete();
-        } else {
-          this.isLoadingSignal.set(false);
-          observer.error(new Error('Invalid credentials'));
-        }
-      }, 1000);
-    });
-  }
-
-  private mockRegister(userData: RegisterRequest): Observable<AuthResponse> {
-    // Simulate API delay
-    return new Observable<AuthResponse>(observer => {
-      setTimeout(() => {
-        const mockResponse: AuthResponse = {
-          user: {
-            id: '1',
-            email: userData.email,
-            firstName: userData.firstName,
-            lastName: userData.lastName,
-            phoneNumber: userData.phoneNumber,
-            isEmailVerified: false,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-          },
-          accessToken: 'mock-access-token',
-          refreshToken: 'mock-refresh-token',
-          expiresIn: 3600
-        };
-        this.handleAuthSuccess(mockResponse);
-        this.isLoadingSignal.set(false);
-        observer.next(mockResponse);
-        observer.complete();
-      }, 1000);
-    });
-  }
-
-  private handleAuthSuccess(response: AuthResponse): void {
-    this.storeToken(response.accessToken);
-    this.storeRefreshToken(response.refreshToken);
-    this.storeUser(response.user);
-    this.setCurrentUser(response.user);
-    this.setupTokenRefresh();
-  }
-
-  private handleAuthError(error: any): Observable<never> {
-    console.error('Authentication error:', error);
-    this.clearAuthData();
-    return throwError(() => error);
-  }
-
-  private completeLogout(): void {
-    this.clearAuthData();
-    this.router.navigate(['/auth/login']);
-    this.isLoadingSignal.set(false);
-  }
-
   private setCurrentUser(user: User | null): void {
     this.currentUserSignal.set(user);
   }
 
-  private storeToken(token: string): void {
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(this.TOKEN_KEY, token);
-    }
+  private mapAuthUserToUser(authUser: AuthUser): User {
+    return {
+      id: authUser.userId,
+      email: authUser.signInDetails?.loginId || '',
+      firstName: '', // You'll need to get this from user attributes
+      lastName: '',  // You'll need to get this from user attributes
+      isEmailVerified: true, // Cognito users are email verified after confirmation
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
   }
 
-  private storeRefreshToken(token: string): void {
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(this.REFRESH_TOKEN_KEY, token);
+  private getErrorMessage(error: any): string {
+    if (error.name === 'UserNotConfirmedException') {
+      return 'Please check your email and confirm your account before signing in.';
     }
-  }
-
-  private storeUser(user: User): void {
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(this.USER_KEY, JSON.stringify(user));
+    if (error.name === 'NotAuthorizedException') {
+      return 'Invalid email or password.';
     }
-  }
-
-  private getStoredToken(): string | null {
-    if (typeof localStorage !== 'undefined') {
-      return localStorage.getItem(this.TOKEN_KEY);
+    if (error.name === 'UserNotFoundException') {
+      return 'No account found with this email address.';
     }
-    return null;
-  }
-
-  private getStoredRefreshToken(): string | null {
-    if (typeof localStorage !== 'undefined') {
-      return localStorage.getItem(this.REFRESH_TOKEN_KEY);
+    if (error.name === 'UsernameExistsException') {
+      return 'An account with this email already exists.';
     }
-    return null;
-  }
-
-  private getStoredUser(): User | null {
-    if (typeof localStorage !== 'undefined') {
-      const userJson = localStorage.getItem(this.USER_KEY);
-      return userJson ? JSON.parse(userJson) : null;
+    if (error.name === 'InvalidPasswordException') {
+      return 'Password does not meet requirements.';
     }
-    return null;
-  }
-
-  private clearAuthData(): void {
-    this.setCurrentUser(null);
-    if (typeof localStorage !== 'undefined') {
-      localStorage.removeItem(this.TOKEN_KEY);
-      localStorage.removeItem(this.REFRESH_TOKEN_KEY);
-      localStorage.removeItem(this.USER_KEY);
+    if (error.name === 'CodeMismatchException') {
+      return 'Invalid verification code.';
     }
-  }
-
-  private isTokenExpired(token: string): boolean {
-    try {
-      const payload = JSON.parse(atob(token.split('.')[1]));
-      const currentTime = Math.floor(Date.now() / 1000);
-      return payload.exp < currentTime;
-    } catch {
-      return true;
+    if (error.name === 'ExpiredCodeException') {
+      return 'Verification code has expired. Please request a new one.';
     }
-  }
-
-  private setupTokenRefresh(): void {
-    // Set up automatic token refresh 5 minutes before expiration
-    const token = this.getStoredToken();
-    if (token && !this.isTokenExpired(token)) {
-      try {
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        const expirationTime = payload.exp * 1000;
-        const refreshTime = expirationTime - (5 * 60 * 1000); // 5 minutes before
-        const timeUntilRefresh = refreshTime - Date.now();
-
-        if (timeUntilRefresh > 0) {
-          setTimeout(() => {
-            this.refreshToken().subscribe();
-          }, timeUntilRefresh);
-        }
-      } catch (error) {
-        console.error('Error setting up token refresh:', error);
-      }
-    }
+    
+    return error.message || 'An unexpected error occurred.';
   }
 }
