@@ -1,9 +1,8 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterModule } from '@angular/router';
 import { AuthService } from '@/app/core/services/auth.service';
-import { firstValueFrom } from 'rxjs';
 
 @Component({
   selector: 'app-login',
@@ -13,7 +12,14 @@ import { firstValueFrom } from 'rxjs';
     <div class="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
       <div class="max-w-md w-full space-y-8">
         <div>
-          <h2 class="mt-6 text-center text-3xl font-extrabold text-gray-900">Sign in to your account</h2>
+          <div class="mx-auto h-12 w-12 flex items-center justify-center rounded-full bg-primary-100">
+            <svg class="h-8 w-8 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
+          </div>
+          <h2 class="mt-6 text-center text-3xl font-extrabold text-gray-900">
+            Sign in to FamLink
+          </h2>
           <p class="mt-2 text-center text-sm text-gray-600">
             Or
             <a routerLink="/auth/register" class="font-medium text-primary-600 hover:text-primary-500">
@@ -21,6 +27,7 @@ import { firstValueFrom } from 'rxjs';
             </a>
           </p>
         </div>
+
         <form [formGroup]="loginForm" (ngSubmit)="onSubmit()" class="mt-8 space-y-6">
           <div class="rounded-md shadow-sm -space-y-px">
             <div>
@@ -50,7 +57,7 @@ import { firstValueFrom } from 'rxjs';
               />
               <div *ngIf="loginForm.get('password')?.invalid && loginForm.get('password')?.touched" class="text-red-500 text-xs mt-1">
                 <span *ngIf="loginForm.get('password')?.errors?.['required']">Password is required</span>
-                <span *ngIf="loginForm.get('password')?.errors?.['minlength']">Password must be at least 6 characters</span>
+                <span *ngIf="loginForm.get('password')?.errors?.['minlength']">Password must be at least 8 characters</span>
               </div>
             </div>
           </div>
@@ -70,7 +77,7 @@ import { firstValueFrom } from 'rxjs';
             </div>
 
             <div class="text-sm">
-              <a href="#" class="font-medium text-primary-600 hover:text-primary-500">
+              <a routerLink="/auth/forgot-password" class="font-medium text-primary-600 hover:text-primary-500">
                 Forgot your password?
               </a>
             </div>
@@ -116,49 +123,116 @@ import { firstValueFrom } from 'rxjs';
             </button>
           </div>
 
-          <div *ngIf="errorMessage" class="text-red-500 text-sm text-center mt-2">
-            {{ errorMessage }}
+          <div *ngIf="errorMessage" class="rounded-md bg-red-50 p-4">
+            <div class="flex">
+              <div class="flex-shrink-0">
+                <svg class="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                  <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+                </svg>
+              </div>
+              <div class="ml-3">
+                <h3 class="text-sm font-medium text-red-800">
+                  {{ errorMessage }}
+                </h3>
+              </div>
+            </div>
+          </div>
+
+          <div *ngIf="needsConfirmation" class="rounded-md bg-yellow-50 p-4">
+            <div class="flex">
+              <div class="flex-shrink-0">
+                <svg class="h-5 w-5 text-yellow-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                  <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                </svg>
+              </div>
+              <div class="ml-3">
+                <h3 class="text-sm font-medium text-yellow-800">
+                  Account not confirmed
+                </h3>
+                <div class="mt-2 text-sm text-yellow-700">
+                  <p>Please check your email and confirm your account before signing in.</p>
+                  <button 
+                    type="button"
+                    (click)="resendConfirmation()"
+                    class="font-medium underline hover:no-underline"
+                  >
+                    Resend confirmation email
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </form>
       </div>
     </div>
   `
 })
-export class LoginComponent {
+export class LoginComponent implements OnInit {
   private fb = inject(FormBuilder);
   private router = inject(Router);
   private authService = inject(AuthService);
 
   loginForm: FormGroup = this.fb.group({
     email: ['', [Validators.required, Validators.email]],
-    password: ['', [Validators.required, Validators.minLength(6)]],
+    password: ['', [Validators.required, Validators.minLength(8)]],
     rememberMe: [false]
   });
 
   isLoading = false;
   errorMessage = '';
+  needsConfirmation = false;
+
+  ngOnInit() {
+    // If user is already authenticated, redirect to dashboard
+    if (this.authService.isAuthenticated()) {
+      this.router.navigate(['/dashboard']);
+    }
+  }
 
   async onSubmit() {
     if (this.loginForm.invalid) return;
 
     this.isLoading = true;
     this.errorMessage = '';
+    this.needsConfirmation = false;
 
     try {
-      const { email, password } = this.loginForm.value;
+      const credentials = {
+        email: this.loginForm.get('email')?.value,
+        password: this.loginForm.get('password')?.value
+      };
       
-      const response = await firstValueFrom(this.authService.login({ 
-        email, 
-        password 
-      }));
-
-      // On success, navigate to dashboard
-      await this.router.navigate(['/dashboard']);
-    } catch (error) {
-      this.errorMessage = 'Invalid email or password';
+      await this.authService.login(credentials);
+      // Navigation is handled in AuthService after successful login
+    } catch (error: any) {
       console.error('Login error:', error);
+      
+      if (error.message.includes('confirm your account')) {
+        this.needsConfirmation = true;
+        this.errorMessage = '';
+      } else {
+        this.errorMessage = error.message || 'Login failed. Please try again.';
+      }
     } finally {
       this.isLoading = false;
+    }
+  }
+
+  async resendConfirmation() {
+    const email = this.loginForm.get('email')?.value;
+    if (!email) {
+      this.errorMessage = 'Please enter your email address first.';
+      return;
+    }
+
+    try {
+      await this.authService.resendConfirmationCode(email);
+      this.errorMessage = '';
+      // Show success message
+      this.needsConfirmation = false;
+      alert('Confirmation email sent! Please check your inbox.');
+    } catch (error: any) {
+      this.errorMessage = error.message || 'Failed to resend confirmation email.';
     }
   }
 }

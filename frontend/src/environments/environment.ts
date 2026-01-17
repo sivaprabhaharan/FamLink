@@ -2,16 +2,19 @@ export const environment = {
   production: false,
   apiUrl: 'http://localhost:5000/api',
   
-  // AWS Configuration (Placeholder)
+  // AWS Configuration
   aws: {
     region: 'us-east-1',
     cognito: {
-      userPoolId: 'us-east-1_XXXXXXXXX', // Replace with actual User Pool ID
-      clientId: 'XXXXXXXXXXXXXXXXXXXXXXXXXX', // Replace with actual Client ID
-      domain: 'famlink-auth.auth.us-east-1.amazoncognito.com' // Replace with actual domain
+      userPoolId: 'us-east-1_66SRClznp', // Replace with your actual User Pool ID
+      clientId: '65qng4sknav247e3dkicgsa5tf', // Replace with your actual Client ID
+      domain: 'us-east-166srclznp.auth.us-east-1.amazoncognito.com', // Replace with your actual domain (without https://)
+      redirectSignIn: 'http://localhost:4200/',
+      redirectSignOut: 'http://localhost:4200/',
+      responseType: 'code' // Use authorization code flow
     },
     s3: {
-      bucketName: 'famlink-media-dev', // Replace with actual bucket name
+      bucketName: 'famlink-media-dev',
       region: 'us-east-1'
     }
   },
@@ -52,11 +55,11 @@ export const environment = {
   // Third-party integrations
   integrations: {
     googleMaps: {
-      apiKey: 'YOUR_GOOGLE_MAPS_API_KEY', // Replace with actual API key
+      apiKey: 'YOUR_GOOGLE_MAPS_API_KEY',
       libraries: ['places', 'geometry']
     },
     stripe: {
-      publishableKey: 'pk_test_XXXXXXXXXXXXXXXXXXXXXXXX' // Replace with actual key
+      publishableKey: 'pk_test_XXXXXXXXXXXXXXXXXXXXXXXX'
     }
   },
 
