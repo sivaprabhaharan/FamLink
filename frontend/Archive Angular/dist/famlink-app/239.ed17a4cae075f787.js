@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkfamlink_app=self.webpackChunkfamlink_app||[]).push([[239],{5239:(d,h,n)=>{n.r(h),n.d(h,{childrenRoutes:()=>l});const l=[{path:"",loadComponent:()=>n.e(746).then(n.bind(n,746)).then(t=>t.ChildrenComponent)}]}}]);
