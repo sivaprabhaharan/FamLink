@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkfamlink_app=self.webpackChunkfamlink_app||[]).push([[779],{6779:(l,d,n)=>{n.r(d),n.d(d,{medicalRecordsRoutes:()=>o});const o=[{path:"",loadComponent:()=>n.e(406).then(n.bind(n,5406)).then(s=>s.MedicalRecordsComponent)}]}}]);

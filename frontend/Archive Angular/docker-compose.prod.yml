@@ -1,0 +1,138 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: famlink-postgres-prod
+    environment:
+      POSTGRES_DB: famlink
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/scripts/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - famlink-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d famlink"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis for caching and sessions
+  redis:
+    image: redis:7-alpine
+    container_name: famlink-redis-prod
+    volumes:
+      - redis_data:/data
+    networks:
+      - famlink-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # FastAPI Backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: famlink-backend-prod
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/famlink
+      - REDIS_URL=redis://redis:6379
+      - AWS_REGION=${AWS_REGION}
+      - COGNITO_USER_POOL_ID=${COGNITO_USER_POOL_ID}
+      - COGNITO_CLIENT_ID=${COGNITO_CLIENT_ID}
+      - COGNITO_CLIENT_SECRET=${COGNITO_CLIENT_SECRET}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - ENVIRONMENT=production
+      - DEBUG=false
+      - LOG_LEVEL=INFO
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - S3_BUCKET_NAME=${S3_BUCKET_NAME}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - famlink-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Angular Frontend (Production build)
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: famlink-frontend-prod
+    depends_on:
+      - backend
+    networks:
+      - famlink-network
+    restart: unless-stopped
+
+  # Nginx Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: famlink-nginx-prod
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.prod.conf:/etc/nginx/nginx.conf
+      - ./nginx/ssl:/etc/nginx/ssl
+      - ./logs/nginx:/var/log/nginx
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - famlink-network
+    restart: unless-stopped
+
+  # Monitoring with Prometheus (optional)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: famlink-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    networks:
+      - famlink-network
+    restart: unless-stopped
+
+  # Grafana for monitoring dashboards (optional)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: famlink-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
+    volumes:
+      - grafana_data:/var/lib/grafana
+    networks:
+      - famlink-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  famlink-network:
+    driver: bridge

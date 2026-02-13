@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkfamlink_app=self.webpackChunkfamlink_app||[]).push([[819],{6819:(s,t,n)=>{n.r(t),n.d(t,{communityRoutes:()=>m});const m=[{path:"",loadComponent:()=>n.e(486).then(n.bind(n,2486)).then(o=>o.CommunityComponent)}]}}]);
