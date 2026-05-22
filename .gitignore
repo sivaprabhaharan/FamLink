@@ -59,3 +59,10 @@ frontend/node_modules/
 # Angular
 .angular/
 
+# Python backend
+backend/.env
+backend/.venv/
+backend/__pycache__/
+backend/.rag_cache/
+.pytest_cache/
+
